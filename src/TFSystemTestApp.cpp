@@ -16,14 +16,14 @@ class TFSystemTestApp : public App {
 	void update() override;
 	void draw() override;
     
-    gl::VboRef mPositions[2],mPhi[2],mTheta[2];
+    gl::VboRef mPositions[2],mPhi[2],mTheta[2],mThetaSpeed[2],mPhiSpeed[2];
     gl::VaoRef mVaos[2];
     
     int current = 0;
     int next = 1;
     
     std::vector<vec3> positions;
-    std::vector<float> phi,theta;
+    std::vector<float> phi,theta,phiSpeed,thetaSpeed;
     
     ci::gl::GlslProgRef mUpdateGlsl,mRenderGlsl;
     
@@ -58,6 +58,8 @@ void TFSystemTestApp::setup()
         positions.push_back(vec3(x,y,z));
         phi.push_back(randFloat());
         theta.push_back(randFloat());
+        phiSpeed.push_back(randFloat(-10,10));
+        thetaSpeed.push_back(randFloat(-10,10));
     }
     
     setupShader();
@@ -88,6 +90,11 @@ void TFSystemTestApp::update()
         // Now bind our opposing buffers to the correct index
         // so that we can capture the values coming from the shader
         gl::bindBufferBase( GL_TRANSFORM_FEEDBACK_BUFFER, 0, mPositions[mIterationIndex & 1] );
+        gl::bindBufferBase( GL_TRANSFORM_FEEDBACK_BUFFER, 1, mPhi[mIterationIndex & 1] );
+        gl::bindBufferBase( GL_TRANSFORM_FEEDBACK_BUFFER, 2, mTheta[mIterationIndex & 1] );
+        gl::bindBufferBase( GL_TRANSFORM_FEEDBACK_BUFFER, 3, mPhiSpeed[mIterationIndex & 1] );
+        gl::bindBufferBase( GL_TRANSFORM_FEEDBACK_BUFFER, 4, mThetaSpeed[mIterationIndex & 1] );
+        
         //gl::bindBufferBase( GL_TRANSFORM_FEEDBACK_BUFFER, VELOCITY_INDEX, mVelocities[mIterationIndex & 1] );
         
         // Begin Transform feedback with the correct primitive,
@@ -121,16 +128,23 @@ void TFSystemTestApp::setupShader(){
     // know which attributes should be captured by Transform FeedBack.
     std::vector<std::string> feedbackVaryings({
         "oPos",
-        "oPhi"
+        "oPhi",
+        "oTheta",
+        "oPhiSpeed"
     });
     
     gl::GlslProg::Format updateFormat;
     updateFormat.vertex( loadAsset( "update.glsl" ) )
     // Because we have separate buffers with which
     // to capture attributes, we're using GL_SEPERATE_ATTRIBS
-    .feedbackFormat( GL_SEPARATE_ATTRIBS )
+    .feedbackFormat( GL_SEPARATE_ATTRIBS_NV)
     // We also send the names of the attributes to capture
-    .feedbackVaryings( feedbackVaryings );
+    .feedbackVaryings( feedbackVaryings )
+    .attribLocation("position", 0)
+    .attribLocation("phi", 1)
+    .attribLocation("theta",2)
+    .attribLocation("phiSpeed", 3)
+    .attribLocation("thetaSpeed", 4);
     
     mUpdateGlsl = gl::GlslProg::create( updateFormat );
 
@@ -147,7 +161,7 @@ void TFSystemTestApp::setupBuffer(){
         gl::ScopedVao scopeVao( mVaos[i] );
         {
             
-            mPositions[i] = gl::Vbo::create( GL_ARRAY_BUFFER, positions.size() * sizeof(vec3), positions.data(), GL_STATIC_DRAW );
+            mPositions[i] = gl::Vbo::create( GL_ARRAY_BUFFER, positions.size() * sizeof(vec3), positions.data(), GL_DYNAMIC_DRAW );
             {
                 // bind and explain the vbo to your vao so that it knows how to distribute vertices to your shaders.
                 gl::ScopedBuffer sccopeBuffer( mPositions[i] );
@@ -155,15 +169,38 @@ void TFSystemTestApp::setupBuffer(){
                 gl::enableVertexAttribArray( 0 );
             }
             
-            mPhi[i] = gl::Vbo::create( GL_ARRAY_BUFFER, phi.size() * sizeof(float), phi.data(), GL_STATIC_DRAW );
+            mPhi[i] = gl::Vbo::create( GL_ARRAY_BUFFER, phi.size() * sizeof(float), phi.data(), GL_DYNAMIC_DRAW );
             {
                 // bind and explain the vbo to your vao so that it knows how to distribute vertices to your shaders.
-                gl::ScopedBuffer sccopeBuffer( mPositions[i] );
+                gl::ScopedBuffer sccopeBuffer( mPhi[i] );
                 gl::vertexAttribPointer( 1, 1, GL_FLOAT, GL_FALSE, 0, (const GLvoid*) 0 );
                 gl::enableVertexAttribArray( 1 );
             }
             
+            mTheta[i] = gl::Vbo::create( GL_ARRAY_BUFFER, theta.size() * sizeof(float), theta.data(), GL_DYNAMIC_DRAW );
+            {
+                // bind and explain the vbo to your vao so that it knows how to distribute vertices to your shaders.
+                gl::ScopedBuffer sccopeBuffer( mTheta[i] );
+                gl::vertexAttribPointer( 2, 1, GL_FLOAT, GL_FALSE, 0, (const GLvoid*) 0 );
+                gl::enableVertexAttribArray( 2 );
+            }
             
+            mPhiSpeed[i] = gl::Vbo::create( GL_ARRAY_BUFFER, phiSpeed.size() * sizeof(float), phiSpeed.data(), GL_DYNAMIC_DRAW );
+            {
+                // bind and explain the vbo to your vao so that it knows how to distribute vertices to your shaders.
+                gl::ScopedBuffer sccopeBuffer( mPhiSpeed[i] );
+                gl::vertexAttribPointer( 3, 1, GL_FLOAT, GL_FALSE, 0, (const GLvoid*) 0 );
+                gl::enableVertexAttribArray( 3 );
+            }
+            
+            mThetaSpeed[i] = gl::Vbo::create( GL_ARRAY_BUFFER, thetaSpeed.size() * sizeof(float), thetaSpeed.data(), GL_DYNAMIC_DRAW );
+            {
+                // bind and explain the vbo to your vao so that it knows how to distribute vertices to your shaders.
+                gl::ScopedBuffer sccopeBuffer( mThetaSpeed[i] );
+                gl::vertexAttribPointer( 4, 1, GL_FLOAT, GL_FALSE, 0, (const GLvoid*) 0 );
+                gl::enableVertexAttribArray( 4 );
+            }
+          
         }
     }
 }
@@ -175,20 +212,44 @@ CINDER_APP( TFSystemTestApp, RendererGl,
 
 /*
  
- mPhi[i] = gl::Vbo::create( GL_ARRAY_BUFFER, phi.size() * sizeof(float), phi.data(), GL_STATIC_DRAW );
+ mPositions[i] = gl::Vbo::create( GL_ARRAY_BUFFER, positions.size() * sizeof(vec3), positions.data(), GL_DYNAMIC_DRAW );
  {
  // bind and explain the vbo to your vao so that it knows how to distribute vertices to your shaders.
  gl::ScopedBuffer sccopeBuffer( mPositions[i] );
+ gl::vertexAttribPointer( 0, 3, GL_FLOAT, GL_FALSE, 0, (const GLvoid*) 0 );
+ gl::enableVertexAttribArray( 0 );
+ }
+ 
+ mPhi[i] = gl::Vbo::create( GL_ARRAY_BUFFER, phi.size() * sizeof(float), phi.data(), GL_DYNAMIC_DRAW );
+ {
+ // bind and explain the vbo to your vao so that it knows how to distribute vertices to your shaders.
+ gl::ScopedBuffer sccopeBuffer( mPhi[i] );
  gl::vertexAttribPointer( 1, 1, GL_FLOAT, GL_FALSE, 0, (const GLvoid*) 0 );
  gl::enableVertexAttribArray( 1 );
  }
  
- mTheta[i] = gl::Vbo::create( GL_ARRAY_BUFFER, theta.size() * sizeof(float), theta.data(), GL_STATIC_DRAW );
+ mTheta[i] = gl::Vbo::create( GL_ARRAY_BUFFER, theta.size() * sizeof(float), theta.data(), GL_DYNAMIC_DRAW );
  {
  // bind and explain the vbo to your vao so that it knows how to distribute vertices to your shaders.
- gl::ScopedBuffer sccopeBuffer( mPositions[i] );
+ gl::ScopedBuffer sccopeBuffer( mTheta[i] );
  gl::vertexAttribPointer( 2, 1, GL_FLOAT, GL_FALSE, 0, (const GLvoid*) 0 );
  gl::enableVertexAttribArray( 2 );
+ }
+ 
+ mPhiSpeed[i] = gl::Vbo::create( GL_ARRAY_BUFFER, phiSpeed.size() * sizeof(float), phiSpeed.data(), GL_DYNAMIC_DRAW );
+ {
+ // bind and explain the vbo to your vao so that it knows how to distribute vertices to your shaders.
+ gl::ScopedBuffer sccopeBuffer( mPhiSpeed[i] );
+ gl::vertexAttribPointer( 3, 1, GL_FLOAT, GL_FALSE, 0, (const GLvoid*) 0 );
+ gl::enableVertexAttribArray( 3 );
+ }
+ 
+ mThetaSpeed[i] = gl::Vbo::create( GL_ARRAY_BUFFER, thetaSpeed.size() * sizeof(float), thetaSpeed.data(), GL_DYNAMIC_DRAW );
+ {
+ // bind and explain the vbo to your vao so that it knows how to distribute vertices to your shaders.
+ gl::ScopedBuffer sccopeBuffer( mThetaSpeed[i] );
+ gl::vertexAttribPointer( 4, 1, GL_FLOAT, GL_FALSE, 0, (const GLvoid*) 0 );
+ gl::enableVertexAttribArray( 4 );
  }
  
  */
