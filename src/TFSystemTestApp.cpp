@@ -27,7 +27,7 @@ class TFSystemTestApp : public App {
     
     ci::gl::GlslProgRef mUpdateGlsl,mRenderGlsl;
     
-    uint32_t mIterationsPerFrame = 1;
+    uint32_t mIterationsPerFrame = 20;
     uint32_t mIterationIndex = 0;
     int total = 7000;
     
@@ -124,20 +124,23 @@ void TFSystemTestApp::draw()
 }
 
 void TFSystemTestApp::setupShader(){
+   
+    
     // These are the names of our out going vertices. GlslProg needs to
     // know which attributes should be captured by Transform FeedBack.
     std::vector<std::string> feedbackVaryings({
         "oPos",
         "oPhi",
         "oTheta",
-        "oPhiSpeed"
+        "oPhiSpeed",
+        "oThetaSpeed"
     });
     
     gl::GlslProg::Format updateFormat;
     updateFormat.vertex( loadAsset( "update.glsl" ) )
     // Because we have separate buffers with which
     // to capture attributes, we're using GL_SEPERATE_ATTRIBS
-    .feedbackFormat( GL_SEPARATE_ATTRIBS_NV)
+    .feedbackFormat( GL_SEPARATE_ATTRIBS)
     // We also send the names of the attributes to capture
     .feedbackVaryings( feedbackVaryings )
     .attribLocation("position", 0)

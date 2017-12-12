@@ -17,12 +17,17 @@ out float oThetaSpeed;
 
 void main(){
     
-    oPos = position;
+    vec3 pos = position;
+    
+    pos *= vec3(0.);
+    
+    
+    oPos = pos;
     oPhi = phi;
     oTheta = theta;
     oPhiSpeed = phiSpeed;
     oThetaSpeed = thetaSpeed;
 
-    oPos = vec3(0.);
+    
     
 }
